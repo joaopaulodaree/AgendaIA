@@ -11,6 +11,11 @@ Monorepo inicial para o sistema de agenda inteligente.
 2. Inicie o backend com `pnpm --filter @agendaia/api dev`.
 3. Inicie o frontend com `pnpm --filter @agendaia/web dev`.
 
+## Banco de dados
+- Configure `DATABASE_URL` no arquivo `apps/api/.env`.
+- Aplique as migrations com `pnpm --filter @agendaia/api db:migrate`.
+- Carregue dados de demonstração com `pnpm --filter @agendaia/api db:seed`.
+
 ## Scripts de workspace
 - `pnpm dev`
 - `pnpm build`
