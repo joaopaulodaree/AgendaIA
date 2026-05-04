@@ -544,6 +544,18 @@ export class AgendaStore {
     });
   }
 
+  async deleteEvent(eventId: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `
+      DELETE FROM app_events
+      WHERE id = $1
+      `,
+      [eventId],
+    );
+
+    return (result.rowCount ?? 0) > 0;
+  }
+
   async listEventsForRange(input: {
     ownerUserId?: string;
     startsAt: string;
