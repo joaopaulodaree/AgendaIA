@@ -13,6 +13,16 @@ export type SyncStatus = (typeof syncStatuses)[number];
 export const participantStatuses = ["needs_action", "accepted", "declined", "tentative"] as const;
 export type ParticipantStatus = (typeof participantStatuses)[number];
 
+export interface SessionRecord {
+  id: string;
+  userId: string;
+  tokenHash: string;
+  expiresAt: string;
+  revokedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface UserRecord {
   id: string;
   email: string;
@@ -75,6 +85,12 @@ export interface CreateUserInput {
   displayName: string;
   passwordHash: string;
   role: UserRole;
+}
+
+export interface CreateSessionInput {
+  userId: string;
+  tokenHash: string;
+  expiresAt: string;
 }
 
 export interface CreateResourceInput {

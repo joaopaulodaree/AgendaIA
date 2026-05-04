@@ -1,13 +1,16 @@
 import type { Pool, PoolClient, QueryResultRow } from "pg";
 import { createPool, withTransaction } from "./db.js";
+import { hashPassword } from "./auth.js";
 import type {
   CreateEventInput,
+  CreateSessionInput,
   CreateResourceInput,
   CreateUserInput,
   EventRecord,
   EventSyncRecord,
   ParticipantStatus,
   ResourceRecord,
+  SessionRecord,
   UserRecord,
 } from "./domain.js";
 
@@ -32,6 +35,18 @@ function mapUser(row: QueryResultRow): UserRecord {
     displayName: row.display_name,
     passwordHash: row.password_hash,
     role: row.role,
+    createdAt: toIsoString(row.created_at),
+    updatedAt: toIsoString(row.updated_at),
+  };
+}
+
+function mapSession(row: QueryResultRow): SessionRecord {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    tokenHash: row.token_hash,
+    expiresAt: toIsoString(row.expires_at),
+    revokedAt: row.revoked_at ? toIsoString(row.revoked_at) : null,
     createdAt: toIsoString(row.created_at),
     updatedAt: toIsoString(row.updated_at),
   };
@@ -213,6 +228,89 @@ export class AgendaStore {
     );
 
     return result.rows[0] ? mapUser(result.rows[0]) : null;
+  }
+
+  async listUsers(): Promise<UserRecord[]> {
+    const result = await this.pool.query(
+      `
+      SELECT *
+      FROM app_users
+      ORDER BY created_at ASC
+      `,
+    );
+
+    return result.rows.map(mapUser);
+  }
+
+  async createSession(input: CreateSessionInput): Promise<SessionRecord> {
+    const result = await this.pool.query(
+      `
+      INSERT INTO app_sessions (user_id, token_hash, expires_at)
+      VALUES ($1, $2, $3)
+      RETURNING *
+      `,
+      [input.userId, input.tokenHash, input.expiresAt],
+    );
+
+    return mapSession(result.rows[0]);
+  }
+
+  async findSessionByTokenHash(tokenHash: string): Promise<{
+    session: SessionRecord;
+    user: UserRecord;
+  } | null> {
+    const result = await this.pool.query(
+      `
+      SELECT
+        s.*,
+        u.id AS user_id,
+        u.email,
+        u.display_name,
+        u.password_hash,
+        u.role,
+        u.created_at AS user_created_at,
+        u.updated_at AS user_updated_at
+      FROM app_sessions s
+      JOIN app_users u ON u.id = s.user_id
+      WHERE s.token_hash = $1
+        AND s.revoked_at IS NULL
+        AND s.expires_at > now()
+      `,
+      [tokenHash],
+    );
+
+    const row = result.rows[0];
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      session: mapSession(row),
+      user: {
+        id: row.user_id,
+        email: row.email,
+        displayName: row.display_name,
+        passwordHash: row.password_hash,
+        role: row.role,
+        createdAt: toIsoString(row.user_created_at),
+        updatedAt: toIsoString(row.user_updated_at),
+      },
+    };
+  }
+
+  async revokeSessionByTokenHash(tokenHash: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `
+      UPDATE app_sessions
+      SET revoked_at = now(), updated_at = now()
+      WHERE token_hash = $1
+        AND revoked_at IS NULL
+      `,
+      [tokenHash],
+    );
+
+    return (result.rowCount ?? 0) > 0;
   }
 
   async createResource(input: CreateResourceInput): Promise<ResourceRecord> {
@@ -551,14 +649,14 @@ export class AgendaStore {
     const admin = await this.createUser({
       email: "admin@agendaia.local",
       displayName: "Admin",
-      passwordHash: "demo-hash-admin",
+      passwordHash: await hashPassword("admin123"),
       role: "admin",
     });
 
     const professional = await this.createUser({
       email: "profissional@agendaia.local",
       displayName: "Profissional",
-      passwordHash: "demo-hash-profissional",
+      passwordHash: await hashPassword("profissional123"),
       role: "profissional",
     });
 

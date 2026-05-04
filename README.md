@@ -15,6 +15,9 @@ Monorepo inicial para o sistema de agenda inteligente.
 - Configure `DATABASE_URL` no arquivo `apps/api/.env`.
 - Aplique as migrations com `pnpm --filter @agendaia/api db:migrate`.
 - Carregue dados de demonstração com `pnpm --filter @agendaia/api db:seed`.
+- Credenciais da seed:
+  - `admin@agendaia.local` / `admin123`
+  - `profissional@agendaia.local` / `profissional123`
 
 ## Scripts de workspace
 - `pnpm dev`
