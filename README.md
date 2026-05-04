@@ -43,5 +43,9 @@ Se o `docker compose` não estiver disponível, o mesmo setup funciona via Colim
 - `pnpm lint`
 - `pnpm test`
 
+## Verificação
+- API: `pnpm --filter @agendaia/api test`
+- Frontend: `pnpm --filter @agendaia/web build`
+
 ## Variáveis de ambiente
 Copie os arquivos `.env.example` de cada app para configurar o ambiente local.
