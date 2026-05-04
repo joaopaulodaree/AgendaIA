@@ -358,9 +358,18 @@ label {
   min-height: 0;
 }
 
+.timeline-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
 .timeline-header {
   display: grid;
-  grid-template-columns: 88px repeat(7, minmax(0, 1fr));
+  grid-template-columns: 88px repeat(7, 160px);
   gap: 0.7rem;
   position: sticky;
   top: 0;
@@ -370,6 +379,7 @@ label {
 }
 
 .timeline-day-label {
+  position: relative;
   min-height: 92px;
   padding: 0.75rem;
   border: 1px solid var(--line);
@@ -388,11 +398,11 @@ label {
 
 .timeline-grid {
   display: grid;
-  grid-template-columns: 88px repeat(7, minmax(0, 1fr));
+  grid-template-columns: 88px repeat(7, 160px);
   gap: 0.7rem;
   min-height: 0;
-  flex: 1;
-  overflow: auto;
+  width: max-content;
+  min-width: 100%;
   padding-right: 0.2rem;
 }
 
@@ -428,6 +438,38 @@ label {
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.03);
   overflow: hidden;
+}
+
+.day-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -6px;
+  bottom: 0;
+  width: 12px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: col-resize;
+  z-index: 2;
+}
+
+.day-resize-handle::before {
+  content: "";
+  position: absolute;
+  top: 16px;
+  bottom: 16px;
+  left: 5px;
+  width: 2px;
+  border-radius: 999px;
+  background: rgba(124, 231, 198, 0.55);
+  opacity: 0;
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.day-resize-handle:hover::before,
+.day-resize-handle.active::before {
+  opacity: 1;
 }
 
 .event-card {
@@ -524,7 +566,7 @@ label {
   }
 
   .timeline-grid {
-    grid-template-columns: 72px repeat(7, minmax(120px, 1fr));
+    grid-template-columns: 72px repeat(7, 160px);
   }
 
   .drawer {

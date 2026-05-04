@@ -7,6 +7,9 @@ export const MIN_EVENT_DURATION_MINUTES = 15;
 export const CALENDAR_DAY_START_HOUR = 0;
 export const CALENDAR_DAY_END_HOUR = 24;
 export const CALENDAR_TIMELINE_ROW_HEIGHT_PX = 72;
+export const WEEK_DAY_COLUMN_MIN_WIDTH_PX = 120;
+export const WEEK_DAY_COLUMN_MAX_WIDTH_PX = 260;
+export const WEEK_DAY_COLUMN_DEFAULT_WIDTH_PX = 160;
 
 export const SLOT_MINUTES = SNAP_INTERVAL_MINUTES;
 export const DAY_START_HOUR = CALENDAR_DAY_START_HOUR;
@@ -163,6 +166,13 @@ export function normalizeDurationMinutes(minutes: number) {
 
 export function clampDurationMinutes(minutes: number) {
   return normalizeDurationMinutes(clampMinutes(minutes));
+}
+
+export function clampWeekDayColumnWidth(width: number) {
+  return Math.min(
+    WEEK_DAY_COLUMN_MAX_WIDTH_PX,
+    Math.max(WEEK_DAY_COLUMN_MIN_WIDTH_PX, Math.round(width)),
+  );
 }
 
 export function eventStartMinutes(event: EventRecord) {

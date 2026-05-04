@@ -6,6 +6,7 @@ import {
   CALENDAR_TIMELINE_ROW_HEIGHT_PX,
   combineDateAndTime,
   clampDurationMinutes,
+  clampWeekDayColumnWidth,
   eventDurationMinutes,
   getCalendarDays,
   getCalendarRange,
@@ -96,6 +97,12 @@ test("returns consistent calendar ranges and timeline hours", () => {
   assert.equal(CALENDAR_DAY_START_HOUR, 0);
   assert.equal(CALENDAR_DAY_END_HOUR, 24);
   assert.equal(CALENDAR_TIMELINE_ROW_HEIGHT_PX, 72);
+});
+
+test("clamps the weekly day column width", () => {
+  assert.equal(clampWeekDayColumnWidth(1), 120);
+  assert.equal(clampWeekDayColumnWidth(160), 160);
+  assert.equal(clampWeekDayColumnWidth(999), 260);
 });
 
 test("enforces minimum event duration from event records", () => {

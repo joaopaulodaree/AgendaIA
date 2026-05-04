@@ -4,6 +4,7 @@ import {
   addDays,
   addMinutes,
   clampDurationMinutes,
+  clampWeekDayColumnWidth,
   CALENDAR_DAY_START_HOUR,
   combineDateAndTime,
   getCalendarDays,
@@ -21,6 +22,7 @@ import {
   toDateInputValue,
   toTimeInputValue,
   CALENDAR_TIMELINE_ROW_HEIGHT_PX,
+  WEEK_DAY_COLUMN_DEFAULT_WIDTH_PX,
   toLocalDateKey,
   type CalendarView,
 } from "./calendar.js";
@@ -100,6 +102,7 @@ function App() {
   const [message, setMessage] = useState<string | null>(null);
   const [draggingEventId, setDraggingEventId] = useState<string | null>(null);
   const [resizingEventId, setResizingEventId] = useState<string | null>(null);
+  const [weekDayColumnWidth, setWeekDayColumnWidth] = useState(WEEK_DAY_COLUMN_DEFAULT_WIDTH_PX);
   const dragDayRef = useRef<Date | null>(null);
 
   useEffect(() => {
@@ -486,6 +489,10 @@ function App() {
               days={days}
               events={visibleEvents}
               onCreate={openCreateDraft}
+              onOpenDay={(day) => {
+                setView("day");
+                setCurrentDate(day);
+              }}
               onOpen={openEditDraft}
               draggingEventId={draggingEventId}
               onDropEvent={dropEventOnDay}
@@ -505,6 +512,8 @@ function App() {
               onResize={resizeEvent}
               resizingEventId={resizingEventId}
               setResizingEventId={setResizingEventId}
+              dayColumnWidth={weekDayColumnWidth}
+              onDayColumnWidthChange={setWeekDayColumnWidth}
             />
           )}
         </div>
@@ -535,6 +544,7 @@ function MonthGrid({
   days,
   events,
   onCreate,
+  onOpenDay,
   onOpen,
   draggingEventId,
   onDropEvent,
@@ -543,6 +553,7 @@ function MonthGrid({
   days: Date[];
   events: EventRecord[];
   onCreate: (date: Date) => void;
+  onOpenDay: (date: Date) => void;
   onOpen: (event: EventRecord) => void;
   draggingEventId: string | null;
   onDropEvent: (eventId: string, targetDay: Date) => Promise<void>;
@@ -569,7 +580,17 @@ function MonthGrid({
             className={`month-cell ${isCurrentMonth ? "" : "muted-cell"}`}
             role="button"
             tabIndex={0}
-            onDoubleClick={() => onCreate(day)}
+            onClick={() => onOpenDay(day)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onOpenDay(day);
+              }
+            }}
+            onDoubleClick={(event) => {
+              event.preventDefault();
+              onCreate(day);
+            }}
             onDragOver={(event) => event.preventDefault()}
             onDrop={(event) => {
               event.preventDefault();
@@ -624,6 +645,8 @@ function TimelineView({
   onResize,
   resizingEventId,
   setResizingEventId,
+  dayColumnWidth,
+  onDayColumnWidthChange,
 }: {
   currentDate: Date;
   view: CalendarView;
@@ -638,14 +661,50 @@ function TimelineView({
   onResize: (eventId: string, nextDurationMinutes: number) => Promise<void>;
   resizingEventId: string | null;
   setResizingEventId: (eventId: string | null) => void;
+  dayColumnWidth: number;
+  onDayColumnWidthChange: (width: number) => void;
 }) {
   const [draftDropDate, setDraftDropDate] = useState<Date | null>(null);
+  const [weekResizeState, setWeekResizeState] = useState<{
+    startX: number;
+    startWidth: number;
+  } | null>(null);
 
   const hours = getTimelineHours();
+  const timelineColumns = {
+    gridTemplateColumns: `88px repeat(${days.length}, ${dayColumnWidth}px)`,
+  };
+
+  function beginWeekResize(event: React.PointerEvent<HTMLButtonElement>) {
+    if (view !== "week") {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startWidth = dayColumnWidth;
+    setWeekResizeState({ startX, startWidth });
+
+    const onMove = (moveEvent: PointerEvent) => {
+      const delta = moveEvent.clientX - startX;
+      onDayColumnWidthChange(clampWeekDayColumnWidth(startWidth + delta));
+    };
+
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      setWeekResizeState(null);
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }
 
   return (
     <section className={`timeline timeline-${view}`}>
-        <div className="timeline-header" style={{ gridTemplateColumns: `88px repeat(${days.length}, minmax(0, 1fr))` }}>
+      <div className="timeline-scroll">
+        <div className="timeline-header" style={timelineColumns}>
         {days.map((day) => (
           <div
             key={toLocalDateKey(day)}
@@ -669,11 +728,19 @@ function TimelineView({
             {draftDropDate && toLocalDateKey(draftDropDate) === toLocalDateKey(day) ? (
               <span className="drop-hint">Soltar aqui</span>
             ) : null}
+            {view === "week" ? (
+              <button
+                type="button"
+                className={`day-resize-handle ${weekResizeState ? "active" : ""}`}
+                aria-label="Redimensionar largura dos dias"
+                onPointerDown={beginWeekResize}
+              />
+            ) : null}
           </div>
         ))}
-      </div>
+        </div>
 
-      <div className="timeline-grid" style={{ gridTemplateColumns: `88px repeat(${days.length}, minmax(0, 1fr))` }}>
+        <div className="timeline-grid" style={timelineColumns}>
         <div className="time-column">
           {hours.map((hour) => (
             <div key={hour} className="time-slot">
@@ -746,6 +813,7 @@ function TimelineView({
             </div>
           );
         })}
+      </div>
       </div>
     </section>
   );
