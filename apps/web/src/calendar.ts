@@ -79,6 +79,36 @@ export function formatShortDate(date: Date) {
   }).format(date);
 }
 
+export function toDateInputValue(date: Date) {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function toTimeInputValue(date: Date) {
+  const hours = `${date.getHours()}`.padStart(2, "0");
+  const minutes = `${date.getMinutes()}`.padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+export function combineDateAndTime(dateValue: string, timeValue: string) {
+  const [year, month, day] = dateValue.split("-").map(Number);
+  const [hour, minute] = timeValue.split(":").map(Number);
+
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(day) ||
+    !Number.isInteger(hour) ||
+    !Number.isInteger(minute)
+  ) {
+    throw new Error("Invalid date or time");
+  }
+
+  return new Date(year, month - 1, day, hour, minute, 0, 0);
+}
+
 export function getCalendarRange(view: CalendarView, currentDate: Date) {
   if (view === "day") {
     const start = startOfDay(currentDate);

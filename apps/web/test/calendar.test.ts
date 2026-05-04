@@ -4,12 +4,15 @@ import {
   CALENDAR_DAY_END_HOUR,
   CALENDAR_DAY_START_HOUR,
   CALENDAR_TIMELINE_ROW_HEIGHT_PX,
+  combineDateAndTime,
   clampDurationMinutes,
   eventDurationMinutes,
   getCalendarDays,
   getCalendarRange,
   getTimelineHours,
   normalizeDurationMinutes,
+  toDateInputValue,
+  toTimeInputValue,
   setTimeOnDay,
   snapToSlot,
 } from "../src/calendar.js";
@@ -60,6 +63,21 @@ test("converts day and minutes to a concrete local date", () => {
   assert.equal(date.getDate(), 4);
   assert.equal(date.getHours(), 14);
   assert.equal(date.getMinutes(), 45);
+});
+
+test("formats and combines date and time inputs explicitly", () => {
+  const inputDate = new Date(2026, 4, 4, 14, 45, 0, 0);
+  const dateValue = toDateInputValue(inputDate);
+  const timeValue = toTimeInputValue(inputDate);
+  const combined = combineDateAndTime(dateValue, timeValue);
+
+  assert.equal(dateValue, "2026-05-04");
+  assert.equal(timeValue, "14:45");
+  assert.equal(combined.getFullYear(), 2026);
+  assert.equal(combined.getMonth(), 4);
+  assert.equal(combined.getDate(), 4);
+  assert.equal(combined.getHours(), 14);
+  assert.equal(combined.getMinutes(), 45);
 });
 
 test("returns consistent calendar ranges and timeline hours", () => {

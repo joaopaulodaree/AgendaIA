@@ -5,6 +5,7 @@ import {
   addMinutes,
   clampDurationMinutes,
   CALENDAR_DAY_START_HOUR,
+  combineDateAndTime,
   getCalendarDays,
   getCalendarRange,
   getTimelineHours,
@@ -17,6 +18,8 @@ import {
   formatShortDate,
   formatTime,
   setTimeOnDay,
+  toDateInputValue,
+  toTimeInputValue,
   CALENDAR_TIMELINE_ROW_HEIGHT_PX,
   toLocalDateKey,
   type CalendarView,
@@ -31,14 +34,10 @@ type AuthState = {
 type DraftEvent = {
   title: string;
   description: string;
-  startsAt: string;
-  endsAt: string;
-};
-
-const VIEW_CONFIG: Record<CalendarView, { title: string; rangeDays: number }> = {
-  day: { title: "Dia", rangeDays: 1 },
-  week: { title: "Semana", rangeDays: 7 },
-  month: { title: "Mês", rangeDays: 42 },
+  startsDate: string;
+  startsTime: string;
+  endsDate: string;
+  endsTime: string;
 };
 
 const DEMO_LOGIN = {
@@ -46,18 +45,11 @@ const DEMO_LOGIN = {
   professional: { email: "profissional@agendaia.local", password: "profissional123" },
 };
 
-function toDateInputValue(date: Date) {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function toDateTimeLocalValue(isoString: string) {
-  const date = new Date(isoString);
-  const offsetMs = date.getTimezoneOffset() * 60_000;
-  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
-}
+const VIEW_CONFIG: Record<CalendarView, { title: string; rangeDays: number }> = {
+  day: { title: "Dia", rangeDays: 1 },
+  week: { title: "Semana", rangeDays: 7 },
+  month: { title: "Mês", rangeDays: 42 },
+};
 
 function atTime(date: Date, hour: number, minute = 0) {
   return setTimeOnDay(date, hour, minute);
@@ -69,8 +61,24 @@ function buildDraftFromDay(date: Date): DraftEvent {
   return {
     title: "",
     description: "",
-    startsAt: start.toISOString(),
-    endsAt: end.toISOString(),
+    startsDate: toDateInputValue(start),
+    startsTime: toTimeInputValue(start),
+    endsDate: toDateInputValue(end),
+    endsTime: toTimeInputValue(end),
+  };
+}
+
+function buildDraftFromEvent(eventRecord: EventRecord): DraftEvent {
+  const start = new Date(eventRecord.startsAt);
+  const end = new Date(eventRecord.endsAt);
+
+  return {
+    title: eventRecord.title,
+    description: eventRecord.description ?? "",
+    startsDate: toDateInputValue(start),
+    startsTime: toTimeInputValue(start),
+    endsDate: toDateInputValue(end),
+    endsTime: toTimeInputValue(end),
   };
 }
 
@@ -230,12 +238,7 @@ function App() {
   function openEditDraft(eventRecord: EventRecord) {
     setMode("edit");
     setSelectedEventId(eventRecord.id);
-    setDraft({
-      title: eventRecord.title,
-      description: eventRecord.description ?? "",
-      startsAt: eventRecord.startsAt,
-      endsAt: eventRecord.endsAt,
-    });
+    setDraft(buildDraftFromEvent(eventRecord));
     setDraftError(null);
   }
 
@@ -249,18 +252,21 @@ function App() {
       return;
     }
 
-    if (new Date(draft.endsAt).getTime() <= new Date(draft.startsAt).getTime()) {
-      setDraftError("O término deve ser depois do início.");
-      return;
-    }
-
     try {
+      const startsAt = combineDateAndTime(draft.startsDate, draft.startsTime);
+      const endsAt = combineDateAndTime(draft.endsDate, draft.endsTime);
+
+      if (endsAt.getTime() <= startsAt.getTime()) {
+        setDraftError("O término deve ser depois do início.");
+        return;
+      }
+
       if (mode === "create") {
         await createEvent(auth.token, {
           title: draft.title,
           description: draft.description || null,
-          startsAt: draft.startsAt,
-          endsAt: draft.endsAt,
+          startsAt: startsAt.toISOString(),
+          endsAt: endsAt.toISOString(),
           timezone: "America/Sao_Paulo",
           isAllDay: false,
         });
@@ -269,8 +275,8 @@ function App() {
         await updateEvent(auth.token, selectedEventId, {
           title: draft.title,
           description: draft.description || null,
-          startsAt: draft.startsAt,
-          endsAt: draft.endsAt,
+          startsAt: startsAt.toISOString(),
+          endsAt: endsAt.toISOString(),
         });
         setMessage("Evento atualizado.");
       }
@@ -279,7 +285,7 @@ function App() {
       setMode(null);
       setSelectedEventId(null);
       setDraftError(null);
-      startTransition(() => setCurrentDate(new Date(draft.startsAt)));
+      startTransition(() => setCurrentDate(startsAt));
     } catch (error) {
       setDraftError(error instanceof Error ? error.message : "Falha ao salvar evento");
     }
@@ -840,27 +846,55 @@ function EventDrawer({
         />
       </label>
 
-      <label>
-        Início
-        <input
-          type="datetime-local"
-          value={toDateTimeLocalValue(draft.startsAt)}
-          onChange={(event) =>
-            setDraft((current) => current ? { ...current, startsAt: new Date(event.target.value).toISOString() } : current)
-          }
-        />
-      </label>
+      <div className="datetime-grid">
+        <label>
+          Data de início
+          <input
+            type="date"
+            value={draft.startsDate}
+            onChange={(event) =>
+              setDraft((current) => current ? { ...current, startsDate: event.target.value } : current)
+            }
+          />
+        </label>
 
-      <label>
-        Fim
-        <input
-          type="datetime-local"
-          value={toDateTimeLocalValue(draft.endsAt)}
-          onChange={(event) =>
-            setDraft((current) => current ? { ...current, endsAt: new Date(event.target.value).toISOString() } : current)
-          }
-        />
-      </label>
+        <label>
+          Hora de início
+          <input
+            type="time"
+            step={900}
+            value={draft.startsTime}
+            onChange={(event) =>
+              setDraft((current) => current ? { ...current, startsTime: event.target.value } : current)
+            }
+          />
+        </label>
+
+        <label>
+          Data de término
+          <input
+            type="date"
+            value={draft.endsDate}
+            onChange={(event) =>
+              setDraft((current) => current ? { ...current, endsDate: event.target.value } : current)
+            }
+          />
+        </label>
+
+        <label>
+          Hora de término
+          <input
+            type="time"
+            step={900}
+            value={draft.endsTime}
+            onChange={(event) =>
+              setDraft((current) => current ? { ...current, endsTime: event.target.value } : current)
+            }
+          />
+        </label>
+      </div>
+
+      <p className="drawer-hint">Use data e hora separadas. O horário é validado antes de salvar.</p>
 
       {draftError ? <div className="error-banner">{draftError}</div> : null}
 

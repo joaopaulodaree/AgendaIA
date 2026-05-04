@@ -445,6 +445,8 @@ label {
   right: 1.25rem;
   bottom: 1.25rem;
   width: min(420px, calc(100% - 2.5rem));
+  max-height: calc(100vh - 2.5rem);
+  overflow: auto;
   padding: 1.2rem;
   display: grid;
   gap: 0.9rem;
@@ -458,6 +460,18 @@ label {
 
 .drawer-actions {
   grid-template-columns: 1fr auto auto;
+}
+
+.datetime-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.drawer-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
 }
 
 .drawer-actions .danger {
@@ -483,6 +497,11 @@ label {
   .drawer {
     position: static;
     width: 100%;
+    max-height: none;
     margin-top: 1rem;
+  }
+
+  .datetime-grid {
+    grid-template-columns: 1fr;
   }
 }
