@@ -17,6 +17,7 @@
     "test": "echo \"api tests not configured yet\""
   },
   "dependencies": {
+    "dotenv": "^17.4.2",
     "pg": "^8.20.0"
   }
 }

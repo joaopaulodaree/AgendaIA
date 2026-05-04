@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { Pool, type PoolClient, type PoolConfig } from "pg";
 
 export function createPool(): Pool {

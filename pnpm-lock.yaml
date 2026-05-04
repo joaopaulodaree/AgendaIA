@@ -14,6 +14,9 @@ importers:
 
   apps/api:
     dependencies:
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
       pg:
         specifier: ^8.20.0
         version: 8.20.0
@@ -666,6 +669,10 @@ packages:
     peerDependenciesMeta:
       supports-color:
         optional: true
+
+  dotenv@17.4.2:
+    resolution: {integrity: sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw==}
+    engines: {node: '>=12'}
 
   electron-to-chromium@1.5.349:
     resolution: {integrity: sha512-QsWVGyRuY07Aqb234QytTfwd5d9AJlfNIQ5wIOl1L+PZDzI9d9+Fn0FRale/QYlFxt/bUnB0/nLd1jFPGxGK1A==}
@@ -1337,6 +1344,8 @@ snapshots:
   debug@4.4.3:
     dependencies:
       ms: 2.1.3
+
+  dotenv@17.4.2: {}
 
   electron-to-chromium@1.5.349: {}
 
