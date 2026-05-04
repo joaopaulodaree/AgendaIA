@@ -2,9 +2,15 @@ import type { EventRecord } from "./types.js";
 
 export type CalendarView = "day" | "week" | "month";
 
-export const SLOT_MINUTES = 30;
-export const DAY_START_HOUR = 7;
-export const DAY_END_HOUR = 21;
+export const SNAP_INTERVAL_MINUTES = 15;
+export const MIN_EVENT_DURATION_MINUTES = 15;
+export const CALENDAR_DAY_START_HOUR = 7;
+export const CALENDAR_DAY_END_HOUR = 21;
+export const CALENDAR_TIMELINE_ROW_HEIGHT_PX = 72;
+
+export const SLOT_MINUTES = SNAP_INTERVAL_MINUTES;
+export const DAY_START_HOUR = CALENDAR_DAY_START_HOUR;
+export const DAY_END_HOUR = CALENDAR_DAY_END_HOUR;
 
 export function toLocalDateKey(date: Date) {
   const year = date.getFullYear();
@@ -25,6 +31,10 @@ export function addDays(date: Date, days: number) {
 
 export function addMinutes(date: Date, minutes: number) {
   return new Date(date.getTime() + minutes * 60_000);
+}
+
+export function setTimeOnDay(date: Date, hour: number, minute = 0) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), hour, minute, 0, 0);
 }
 
 export function startOfWeek(date: Date) {
@@ -69,16 +79,60 @@ export function formatShortDate(date: Date) {
   }).format(date);
 }
 
+export function getCalendarRange(view: CalendarView, currentDate: Date) {
+  if (view === "day") {
+    const start = startOfDay(currentDate);
+    return { start, end: addDays(start, 1) };
+  }
+
+  if (view === "week") {
+    const start = startOfWeek(currentDate);
+    return { start, end: addDays(start, 7) };
+  }
+
+  const start = startOfWeek(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1));
+  return { start, end: addDays(endOfMonthGrid(currentDate), 1) };
+}
+
+export function getCalendarDays(view: CalendarView, currentDate: Date) {
+  if (view === "day") {
+    return [startOfDay(currentDate)];
+  }
+
+  if (view === "week") {
+    const start = startOfWeek(currentDate);
+    return Array.from({ length: 7 }, (_, index) => addDays(start, index));
+  }
+
+  const first = startOfWeek(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1));
+  return Array.from({ length: 42 }, (_, index) => addDays(first, index));
+}
+
+export function getTimelineHours() {
+  return Array.from(
+    { length: CALENDAR_DAY_END_HOUR - CALENDAR_DAY_START_HOUR },
+    (_, index) => CALENDAR_DAY_START_HOUR + index,
+  );
+}
+
 export function toEventDate(event: EventRecord, which: "start" | "end") {
   return new Date(which === "start" ? event.startsAt : event.endsAt);
 }
 
 export function clampMinutes(minutes: number) {
-  return Math.min(DAY_END_HOUR * 60, Math.max(DAY_START_HOUR * 60, minutes));
+  return Math.min(CALENDAR_DAY_END_HOUR * 60, Math.max(CALENDAR_DAY_START_HOUR * 60, minutes));
 }
 
 export function snapToSlot(minutes: number) {
-  return Math.round(minutes / SLOT_MINUTES) * SLOT_MINUTES;
+  return Math.round(minutes / SNAP_INTERVAL_MINUTES) * SNAP_INTERVAL_MINUTES;
+}
+
+export function normalizeDurationMinutes(minutes: number) {
+  return Math.max(MIN_EVENT_DURATION_MINUTES, snapToSlot(minutes));
+}
+
+export function clampDurationMinutes(minutes: number) {
+  return normalizeDurationMinutes(clampMinutes(minutes));
 }
 
 export function eventStartMinutes(event: EventRecord) {
@@ -89,7 +143,7 @@ export function eventStartMinutes(event: EventRecord) {
 export function eventDurationMinutes(event: EventRecord) {
   const start = new Date(event.startsAt);
   const end = new Date(event.endsAt);
-  return Math.max(SLOT_MINUTES, Math.round((end.getTime() - start.getTime()) / 60_000));
+  return Math.max(MIN_EVENT_DURATION_MINUTES, Math.round((end.getTime() - start.getTime()) / 60_000));
 }
 
 export function filterEventsForDay(events: EventRecord[], date: Date) {

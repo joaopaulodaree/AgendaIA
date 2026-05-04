@@ -17,6 +17,6 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "lint": "echo \"web lint not configured yet\"",
-    "test": "echo \"web tests not configured yet\""
+    "test": "pnpm exec tsx --test test/*.test.ts"
   }
 }

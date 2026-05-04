@@ -3,10 +3,11 @@ import { createEvent, deleteEvent, getMe, listEvents, login, updateEvent } from 
 import {
   addDays,
   addMinutes,
-  clampMinutes,
-  DAY_END_HOUR,
-  DAY_START_HOUR,
-  endOfMonthGrid,
+  clampDurationMinutes,
+  CALENDAR_DAY_START_HOUR,
+  getCalendarDays,
+  getCalendarRange,
+  getTimelineHours,
   eventDurationMinutes,
   eventStartMinutes,
   filterEventsForDay,
@@ -15,9 +16,8 @@ import {
   formatMonthLabel,
   formatShortDate,
   formatTime,
-  snapToSlot,
-  startOfDay,
-  startOfWeek,
+  setTimeOnDay,
+  CALENDAR_TIMELINE_ROW_HEIGHT_PX,
   toLocalDateKey,
   type CalendarView,
 } from "./calendar.js";
@@ -60,7 +60,7 @@ function toDateTimeLocalValue(isoString: string) {
 }
 
 function atTime(date: Date, hour: number, minute = 0) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), hour, minute, 0, 0);
+  return setTimeOnDay(date, hour, minute);
 }
 
 function buildDraftFromDay(date: Date): DraftEvent {
@@ -118,11 +118,7 @@ function App() {
     setLoadingEvents(true);
     setEventError(null);
 
-    const range = view === "day"
-      ? { start: startOfDay(currentDate), end: addDays(startOfDay(currentDate), 1) }
-      : view === "week"
-        ? { start: startOfWeek(currentDate), end: addDays(startOfWeek(currentDate), 7) }
-        : { start: startOfWeek(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)), end: addDays(endOfMonthGrid(currentDate), 1) };
+    const range = getCalendarRange(view, currentDate);
 
     listEvents(auth.token, range.start.toISOString(), range.end.toISOString(), auth.user.role === "admin" ? undefined : auth.user.id)
       .then((payload) => {
@@ -188,18 +184,7 @@ function App() {
   }, [auth]);
 
   const currentRange = useMemo(() => {
-    if (view === "day") {
-      const start = startOfDay(currentDate);
-      return { start, end: addDays(start, 1) };
-    }
-
-    if (view === "week") {
-      const start = startOfWeek(currentDate);
-      return { start, end: addDays(start, 7) };
-    }
-
-    const start = startOfWeek(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1));
-    return { start, end: addDays(endOfMonthGrid(currentDate), 1) };
+    return getCalendarRange(view, currentDate);
   }, [currentDate, view]);
 
   const visibleEvents = useMemo(() => {
@@ -209,16 +194,7 @@ function App() {
   }, [events, currentRange]);
 
   const days = useMemo(() => {
-    if (view === "day") {
-      return [startOfDay(currentDate)];
-    }
-
-    if (view === "week") {
-      return Array.from({ length: 7 }, (_, index) => addDays(startOfWeek(currentDate), index));
-    }
-
-    const first = startOfWeek(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1));
-    return Array.from({ length: 42 }, (_, index) => addDays(first, index));
+    return getCalendarDays(view, currentDate);
   }, [currentDate, view]);
 
   function saveAuth(next: AuthState | null) {
@@ -657,7 +633,7 @@ function TimelineView({
 }) {
   const [draftDropDate, setDraftDropDate] = useState<Date | null>(null);
 
-  const hours = Array.from({ length: DAY_END_HOUR - DAY_START_HOUR }, (_, index) => DAY_START_HOUR + index);
+  const hours = getTimelineHours();
 
   return (
     <section className={`timeline timeline-${view}`}>
@@ -722,8 +698,8 @@ function TimelineView({
               {dayEvents.map((eventRecord) => {
                 const startMinutes = eventStartMinutes(eventRecord);
                 const duration = eventDurationMinutes(eventRecord);
-                const top = ((startMinutes - DAY_START_HOUR * 60) / 60) * 72;
-                const height = (duration / 60) * 72;
+                const top = ((startMinutes - CALENDAR_DAY_START_HOUR * 60) / 60) * CALENDAR_TIMELINE_ROW_HEIGHT_PX;
+                const height = (duration / 60) * CALENDAR_TIMELINE_ROW_HEIGHT_PX;
 
                 return (
                   <article
@@ -796,8 +772,8 @@ function ResizeHandle({
       }
 
       const delta = moveEvent.clientY - startY.current;
-      const nextDuration = clampMinutes(Math.max(30, initialDuration.current + Math.round(delta / 2)));
-      void onResize(eventId, snapToSlot(nextDuration));
+      const nextDuration = clampDurationMinutes(initialDuration.current + Math.round(delta / 2));
+      void onResize(eventId, nextDuration);
     };
 
     const onUp = () => {
