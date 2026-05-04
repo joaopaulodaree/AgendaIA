@@ -8,6 +8,7 @@ coverage
 .turbo
 .next
 vite.svg
+*.tsbuildinfo
 .specs/
 .pnpm-store/
 node_modules/.pnpm-store/

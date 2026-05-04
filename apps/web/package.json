@@ -15,7 +15,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc --noEmit && vite build",
     "lint": "echo \"web lint not configured yet\"",
     "test": "echo \"web tests not configured yet\""
   }
