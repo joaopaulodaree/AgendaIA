@@ -1,4 +1,4 @@
-import type { Pool, PoolClient, QueryResultRow } from "pg";
+import type { Pool, PoolClient, QueryResult, QueryResultRow } from "pg";
 import { createPool, withTransaction } from "./db.js";
 import { hashPassword } from "./auth.js";
 import type {
@@ -114,8 +114,33 @@ async function loadEventRelations(executor: DbExecutor, eventIds: string[]) {
     }>();
   }
 
-  const [participantsResult, resourcesResult, recurrenceResult] = await Promise.all([
-    executor.query<{
+  const useSequentialQueries = "release" in executor;
+
+  let participantsResult: QueryResult<{
+    event_id: string;
+    user_id: string;
+    response_status: ParticipantStatus;
+  }>;
+  let resourcesResult: QueryResult<{
+    event_id: string;
+    id: string;
+    name: string;
+    description: string | null;
+    created_at: Date;
+    updated_at: Date;
+  }>;
+  let recurrenceResult: QueryResult<{
+    event_id: string;
+    rrule: string;
+    timezone: string;
+    dtstart: Date;
+    until_at: Date | null;
+    count: number | null;
+    exdates: Date[];
+  }>;
+
+  if (useSequentialQueries) {
+    participantsResult = await executor.query<{
       event_id: string;
       user_id: string;
       response_status: ParticipantStatus;
@@ -127,8 +152,9 @@ async function loadEventRelations(executor: DbExecutor, eventIds: string[]) {
       ORDER BY event_id, user_id
       `,
       [eventIds],
-    ),
-    executor.query<{
+    );
+
+    resourcesResult = await executor.query<{
       event_id: string;
       id: string;
       name: string;
@@ -144,8 +170,9 @@ async function loadEventRelations(executor: DbExecutor, eventIds: string[]) {
       ORDER BY er.event_id, r.name
       `,
       [eventIds],
-    ),
-    executor.query<{
+    );
+
+    recurrenceResult = await executor.query<{
       event_id: string;
       rrule: string;
       timezone: string;
@@ -160,8 +187,57 @@ async function loadEventRelations(executor: DbExecutor, eventIds: string[]) {
       WHERE event_id = ANY($1::uuid[])
       `,
       [eventIds],
-    ),
-  ]);
+    );
+  } else {
+    [participantsResult, resourcesResult, recurrenceResult] = await Promise.all([
+      executor.query<{
+        event_id: string;
+        user_id: string;
+        response_status: ParticipantStatus;
+      }>(
+        `
+        SELECT event_id, user_id, response_status
+        FROM app_event_participants
+        WHERE event_id = ANY($1::uuid[])
+        ORDER BY event_id, user_id
+        `,
+        [eventIds],
+      ),
+      executor.query<{
+        event_id: string;
+        id: string;
+        name: string;
+        description: string | null;
+        created_at: Date;
+        updated_at: Date;
+      }>(
+        `
+        SELECT er.event_id, r.id, r.name, r.description, r.created_at, r.updated_at
+        FROM app_event_resources er
+        JOIN app_resources r ON r.id = er.resource_id
+        WHERE er.event_id = ANY($1::uuid[])
+        ORDER BY er.event_id, r.name
+        `,
+        [eventIds],
+      ),
+      executor.query<{
+        event_id: string;
+        rrule: string;
+        timezone: string;
+        dtstart: Date;
+        until_at: Date | null;
+        count: number | null;
+        exdates: Date[];
+      }>(
+        `
+        SELECT event_id, rrule, timezone, dtstart, until_at, count, exdates
+        FROM app_event_recurrence
+        WHERE event_id = ANY($1::uuid[])
+        `,
+        [eventIds],
+      ),
+    ]);
+  }
 
   const grouped = new Map<string, {
     participants: EventRecord["participants"];
