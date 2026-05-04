@@ -705,6 +705,7 @@ function TimelineView({
     <section className={`timeline timeline-${view}`}>
       <div className="timeline-scroll">
         <div className="timeline-header" style={timelineColumns}>
+          <div className="timeline-spacer" aria-hidden="true" />
         {days.map((day) => (
           <div
             key={toLocalDateKey(day)}

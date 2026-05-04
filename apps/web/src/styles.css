@@ -378,6 +378,10 @@ label {
   background: linear-gradient(180deg, rgba(16, 24, 52, 0.98), rgba(16, 24, 52, 0.92));
 }
 
+.timeline-spacer {
+  min-height: 92px;
+}
+
 .timeline-day-label {
   position: relative;
   min-height: 92px;
