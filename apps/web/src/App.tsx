@@ -23,6 +23,7 @@ import {
   toTimeInputValue,
   CALENDAR_TIMELINE_ROW_HEIGHT_PX,
   WEEK_DAY_COLUMN_DEFAULT_WIDTH_PX,
+  projectResizeDuration,
   toLocalDateKey,
   type CalendarView,
 } from "./calendar.js";
@@ -669,6 +670,7 @@ function TimelineView({
     startX: number;
     startWidth: number;
   } | null>(null);
+  const [resizePreview, setResizePreview] = useState<{ eventId: string; duration: number } | null>(null);
 
   const hours = getTimelineHours();
   const timelineColumns = {
@@ -774,13 +776,17 @@ function TimelineView({
               {dayEvents.map((eventRecord) => {
                 const startMinutes = eventStartMinutes(eventRecord);
                 const duration = eventDurationMinutes(eventRecord);
+                const displayDuration =
+                  resizePreview?.eventId === eventRecord.id ? resizePreview.duration : duration;
                 const top = ((startMinutes - CALENDAR_DAY_START_HOUR * 60) / 60) * CALENDAR_TIMELINE_ROW_HEIGHT_PX;
-                const height = (duration / 60) * CALENDAR_TIMELINE_ROW_HEIGHT_PX;
+                const height = (displayDuration / 60) * CALENDAR_TIMELINE_ROW_HEIGHT_PX;
 
                 return (
                   <article
                     key={eventRecord.id}
-                    className={`event-card ${draggingEventId === eventRecord.id ? "dragging" : ""}`}
+                    className={`event-card ${draggingEventId === eventRecord.id ? "dragging" : ""} ${
+                      resizePreview?.eventId === eventRecord.id ? "resizing" : ""
+                    }`}
                     style={{
                       top: `${Math.max(0, top)}px`,
                       height: `${Math.max(48, height)}px`,
@@ -806,7 +812,12 @@ function TimelineView({
                       duration={duration}
                       resizingEventId={resizingEventId}
                       setResizingEventId={setResizingEventId}
-                      onResize={onResize}
+                      onPreview={(nextDuration) => setResizePreview({ eventId: eventRecord.id, duration: nextDuration })}
+                      onCommit={onResize}
+                      onClearPreview={() => {
+                        setResizePreview((current) => (current?.eventId === eventRecord.id ? null : current));
+                      }}
+                      onResizeStart={() => setResizePreview({ eventId: eventRecord.id, duration })}
                     />
                   </article>
                 );
@@ -825,23 +836,32 @@ function ResizeHandle({
   duration,
   resizingEventId,
   setResizingEventId,
-  onResize,
+  onPreview,
+  onCommit,
+  onClearPreview,
+  onResizeStart,
 }: {
   eventId: string;
   duration: number;
   resizingEventId: string | null;
   setResizingEventId: (eventId: string | null) => void;
-  onResize: (eventId: string, nextDurationMinutes: number) => Promise<void>;
+  onPreview: (nextDurationMinutes: number) => void;
+  onCommit: (eventId: string, nextDurationMinutes: number) => Promise<void>;
+  onClearPreview: () => void;
+  onResizeStart: () => void;
 }) {
   const startY = useRef<number | null>(null);
   const initialDuration = useRef<number>(duration);
+  const lastDuration = useRef<number>(duration);
 
   function beginResize(event: React.PointerEvent<HTMLDivElement>) {
     event.stopPropagation();
     event.preventDefault();
     startY.current = event.clientY;
     initialDuration.current = duration;
+    lastDuration.current = duration;
     setResizingEventId(eventId);
+    onResizeStart();
 
     const onMove = (moveEvent: PointerEvent) => {
       if (startY.current == null) {
@@ -849,15 +869,19 @@ function ResizeHandle({
       }
 
       const delta = moveEvent.clientY - startY.current;
-      const nextDuration = clampDurationMinutes(initialDuration.current + Math.round(delta / 2));
-      void onResize(eventId, nextDuration);
+      const nextDuration = projectResizeDuration(initialDuration.current, delta);
+      lastDuration.current = nextDuration;
+      onPreview(nextDuration);
     };
 
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      const nextDuration = lastDuration.current;
       startY.current = null;
       setResizingEventId(null);
+      onClearPreview();
+      void onCommit(eventId, nextDuration);
     };
 
     window.addEventListener("pointermove", onMove);

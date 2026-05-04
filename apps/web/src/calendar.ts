@@ -168,6 +168,11 @@ export function clampDurationMinutes(minutes: number) {
   return normalizeDurationMinutes(clampMinutes(minutes));
 }
 
+export function projectResizeDuration(startDurationMinutes: number, deltaY: number) {
+  const deltaMinutes = Math.round(deltaY / (CALENDAR_TIMELINE_ROW_HEIGHT_PX / 60));
+  return clampDurationMinutes(startDurationMinutes + deltaMinutes);
+}
+
 export function clampWeekDayColumnWidth(width: number) {
   return Math.min(
     WEEK_DAY_COLUMN_MAX_WIDTH_PX,

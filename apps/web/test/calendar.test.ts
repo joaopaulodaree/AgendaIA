@@ -12,6 +12,7 @@ import {
   getCalendarRange,
   getTimelineHours,
   normalizeDurationMinutes,
+  projectResizeDuration,
   toDateInputValue,
   toTimeInputValue,
   setTimeOnDay,
@@ -103,6 +104,12 @@ test("clamps the weekly day column width", () => {
   assert.equal(clampWeekDayColumnWidth(1), 120);
   assert.equal(clampWeekDayColumnWidth(160), 160);
   assert.equal(clampWeekDayColumnWidth(999), 260);
+});
+
+test("projects resize duration from the current event size", () => {
+  assert.equal(projectResizeDuration(60, -18), 45);
+  assert.equal(projectResizeDuration(60, 18), 75);
+  assert.equal(projectResizeDuration(30, -1000), 15);
 });
 
 test("enforces minimum event duration from event records", () => {
