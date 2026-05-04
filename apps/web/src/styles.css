@@ -520,6 +520,16 @@ label {
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.26), transparent);
 }
 
+.resize-handle-top {
+  top: 0;
+  bottom: auto;
+}
+
+.resize-handle-bottom {
+  top: auto;
+  bottom: 0;
+}
+
 .drawer {
   position: absolute;
   right: 1.25rem;

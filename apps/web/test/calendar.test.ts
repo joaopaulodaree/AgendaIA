@@ -12,7 +12,9 @@ import {
   getCalendarRange,
   getTimelineHours,
   normalizeDurationMinutes,
-  projectResizeDuration,
+  projectDropStartMinutes,
+  projectResizeEndMinutes,
+  projectResizeStartMinutes,
   toDateInputValue,
   toTimeInputValue,
   setTimeOnDay,
@@ -106,10 +108,13 @@ test("clamps the weekly day column width", () => {
   assert.equal(clampWeekDayColumnWidth(999), 260);
 });
 
-test("projects resize duration from the current event size", () => {
-  assert.equal(projectResizeDuration(60, -18), 45);
-  assert.equal(projectResizeDuration(60, 18), 75);
-  assert.equal(projectResizeDuration(30, -1000), 15);
+test("projects drop and resize positions from pointer movement", () => {
+  assert.equal(projectDropStartMinutes(216, 0, 30), 180);
+  assert.equal(projectDropStartMinutes(721, 0, 30), 600);
+  assert.equal(projectResizeStartMinutes(120, 240, -18), 105);
+  assert.equal(projectResizeStartMinutes(120, 240, 1000), 225);
+  assert.equal(projectResizeEndMinutes(120, 240, -18), 225);
+  assert.equal(projectResizeEndMinutes(120, 240, 1000), 1080);
 });
 
 test("enforces minimum event duration from event records", () => {

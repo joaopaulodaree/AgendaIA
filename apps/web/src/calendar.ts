@@ -168,9 +168,29 @@ export function clampDurationMinutes(minutes: number) {
   return normalizeDurationMinutes(clampMinutes(minutes));
 }
 
-export function projectResizeDuration(startDurationMinutes: number, deltaY: number) {
-  const deltaMinutes = Math.round(deltaY / (CALENDAR_TIMELINE_ROW_HEIGHT_PX / 60));
-  return clampDurationMinutes(startDurationMinutes + deltaMinutes);
+function projectDeltaMinutes(deltaY: number) {
+  return Math.round(deltaY / (CALENDAR_TIMELINE_ROW_HEIGHT_PX / 60));
+}
+
+function clampToDayMinutes(minutes: number) {
+  return Math.min(CALENDAR_DAY_END_HOUR * 60, Math.max(CALENDAR_DAY_START_HOUR * 60, minutes));
+}
+
+export function projectResizeEndMinutes(startMinutes: number, endMinutes: number, deltaY: number) {
+  const nextEnd = snapToSlot(clampToDayMinutes(endMinutes + projectDeltaMinutes(deltaY)));
+  return Math.max(startMinutes + MIN_EVENT_DURATION_MINUTES, nextEnd);
+}
+
+export function projectResizeStartMinutes(startMinutes: number, endMinutes: number, deltaY: number) {
+  const nextStart = snapToSlot(clampToDayMinutes(startMinutes + projectDeltaMinutes(deltaY)));
+  return Math.min(endMinutes - MIN_EVENT_DURATION_MINUTES, nextStart);
+}
+
+export function projectDropStartMinutes(clientY: number, elementTop: number, durationMinutes: number) {
+  const relativeMinutes = Math.round(((clientY - elementTop) / CALENDAR_TIMELINE_ROW_HEIGHT_PX) * 60);
+  const snappedMinutes = snapToSlot(relativeMinutes);
+  const maxStartMinutes = CALENDAR_DAY_END_HOUR * 60 - durationMinutes;
+  return Math.min(maxStartMinutes, Math.max(CALENDAR_DAY_START_HOUR * 60, snappedMinutes));
 }
 
 export function clampWeekDayColumnWidth(width: number) {

@@ -3,7 +3,6 @@ import { createEvent, deleteEvent, getMe, listEvents, login, updateEvent } from 
 import {
   addDays,
   addMinutes,
-  clampDurationMinutes,
   clampWeekDayColumnWidth,
   CALENDAR_DAY_START_HOUR,
   combineDateAndTime,
@@ -18,12 +17,15 @@ import {
   formatMonthLabel,
   formatShortDate,
   formatTime,
+  projectDropStartMinutes,
+  projectResizeEndMinutes,
+  projectResizeStartMinutes,
   setTimeOnDay,
   toDateInputValue,
   toTimeInputValue,
   CALENDAR_TIMELINE_ROW_HEIGHT_PX,
   WEEK_DAY_COLUMN_DEFAULT_WIDTH_PX,
-  projectResizeDuration,
+  startOfDay,
   toLocalDateKey,
   type CalendarView,
 } from "./calendar.js";
@@ -104,7 +106,6 @@ function App() {
   const [draggingEventId, setDraggingEventId] = useState<string | null>(null);
   const [resizingEventId, setResizingEventId] = useState<string | null>(null);
   const [weekDayColumnWidth, setWeekDayColumnWidth] = useState(WEEK_DAY_COLUMN_DEFAULT_WIDTH_PX);
-  const dragDayRef = useRef<Date | null>(null);
 
   useEffect(() => {
     const raw = localStorage.getItem("agendaia-auth");
@@ -337,7 +338,7 @@ function App() {
     setDraggingEventId(null);
   }
 
-  async function dropEventOnDay(eventId: string, targetDay: Date) {
+  async function dropEventOnDay(eventId: string, targetDay: Date, targetStartMinutes?: number) {
     if (!auth) {
       return;
     }
@@ -349,8 +350,24 @@ function App() {
 
     const duration = eventDurationMinutes(eventRecord);
     const currentStart = new Date(eventRecord.startsAt);
-    const targetStart = atTime(targetDay, currentStart.getHours(), currentStart.getMinutes());
+    const targetStart =
+      typeof targetStartMinutes === "number"
+        ? addMinutes(startOfDay(targetDay), targetStartMinutes)
+        : atTime(targetDay, currentStart.getHours(), currentStart.getMinutes());
     const targetEnd = addMinutes(targetStart, duration);
+    const previousEvent = eventRecord;
+
+    setEvents((current) =>
+      current.map((item) =>
+        item.id === eventId
+          ? {
+              ...item,
+              startsAt: targetStart.toISOString(),
+              endsAt: targetEnd.toISOString(),
+            }
+          : item,
+      ),
+    );
 
     try {
       const updated = await updateEvent(auth.token, eventId, {
@@ -360,14 +377,14 @@ function App() {
       setEvents((current) => current.map((item) => (item.id === updated.event.id ? updated.event : item)));
       setMessage("Evento movido.");
     } catch (error) {
+      setEvents((current) => current.map((item) => (item.id === eventId ? previousEvent : item)));
       setEventError(error instanceof Error ? error.message : "Falha ao mover evento");
     } finally {
       setDraggingEventId(null);
-      dragDayRef.current = null;
     }
   }
 
-  async function resizeEvent(eventId: string, nextDurationMinutes: number) {
+  async function resizeEvent(eventId: string, nextStartMinutes: number, nextEndMinutes: number) {
     if (!auth) {
       return;
     }
@@ -377,8 +394,9 @@ function App() {
       return;
     }
 
-    const start = new Date(eventRecord.startsAt);
-    const end = addMinutes(start, nextDurationMinutes);
+    const dayStart = startOfDay(new Date(eventRecord.startsAt));
+    const start = addMinutes(dayStart, nextStartMinutes);
+    const end = addMinutes(dayStart, nextEndMinutes);
 
     try {
       const updated = await updateEvent(auth.token, eventId, {
@@ -592,10 +610,13 @@ function MonthGrid({
               event.preventDefault();
               onCreate(day);
             }}
-            onDragOver={(event) => event.preventDefault()}
+            onDragOver={(event) => {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "move";
+            }}
             onDrop={(event) => {
               event.preventDefault();
-              const eventId = event.dataTransfer.getData("text/event-id");
+              const eventId = getDraggedEventId(event);
               if (eventId) {
                 void onDropEvent(eventId, day);
               }
@@ -617,7 +638,9 @@ function MonthGrid({
                   }}
                   draggable
                   onDragStart={(event) => {
+                    event.dataTransfer.effectAllowed = "move";
                     event.dataTransfer.setData("text/event-id", item.id);
+                    event.dataTransfer.setData("text/plain", item.id);
                   }}
                 >
                   {item.title}
@@ -658,8 +681,8 @@ function TimelineView({
   draggingEventId: string | null;
   onDragStart: (eventId: string) => void;
   onDragEnd: () => void;
-  onDropEvent: (eventId: string, targetDay: Date) => Promise<void>;
-  onResize: (eventId: string, nextDurationMinutes: number) => Promise<void>;
+  onDropEvent: (eventId: string, targetDay: Date, targetStartMinutes?: number) => Promise<void>;
+  onResize: (eventId: string, nextStartMinutes: number, nextEndMinutes: number) => Promise<void>;
   resizingEventId: string | null;
   setResizingEventId: (eventId: string | null) => void;
   dayColumnWidth: number;
@@ -670,7 +693,11 @@ function TimelineView({
     startX: number;
     startWidth: number;
   } | null>(null);
-  const [resizePreview, setResizePreview] = useState<{ eventId: string; duration: number } | null>(null);
+  const [resizePreview, setResizePreview] = useState<{
+    eventId: string;
+    startMinutes: number;
+    endMinutes: number;
+  } | null>(null);
 
   const hours = getTimelineHours();
   const timelineColumns = {
@@ -708,132 +735,167 @@ function TimelineView({
       <div className="timeline-scroll">
         <div className="timeline-header" style={timelineColumns}>
           <div className="timeline-spacer" aria-hidden="true" />
-        {days.map((day) => (
-          <div
-            key={toLocalDateKey(day)}
-            className="timeline-day-label"
-            onDoubleClick={() => onCreate(day)}
-            onDragOver={(event) => {
-              event.preventDefault();
-              setDraftDropDate(day);
-            }}
-            onDrop={(event) => {
-              event.preventDefault();
-              const eventId = event.dataTransfer.getData("text/event-id");
-              if (eventId) {
-                void onDropEvent(eventId, day);
-              }
-              setDraftDropDate(null);
-            }}
-          >
-            <strong>{day.toLocaleDateString("pt-BR", { weekday: "short" })}</strong>
-            <span>{day.getDate()}</span>
-            {draftDropDate && toLocalDateKey(draftDropDate) === toLocalDateKey(day) ? (
-              <span className="drop-hint">Soltar aqui</span>
-            ) : null}
-            {view === "week" ? (
-              <button
-                type="button"
-                className={`day-resize-handle ${weekResizeState ? "active" : ""}`}
-                aria-label="Redimensionar largura dos dias"
-                onPointerDown={beginWeekResize}
-              />
-            ) : null}
-          </div>
-        ))}
-        </div>
-
-        <div className="timeline-grid" style={timelineColumns}>
-        <div className="time-column">
-          {hours.map((hour) => (
-            <div key={hour} className="time-slot">
-              {`${`${hour}`.padStart(2, "0")}:00`}
+          {days.map((day) => (
+            <div
+              key={toLocalDateKey(day)}
+              className="timeline-day-label"
+              onDoubleClick={() => onCreate(day)}
+              onDragOver={(event) => {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                setDraftDropDate(day);
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                const eventId = getDraggedEventId(event);
+                if (eventId) {
+                  void onDropEvent(eventId, day);
+                }
+                setDraftDropDate(null);
+              }}
+            >
+              <strong>{day.toLocaleDateString("pt-BR", { weekday: "short" })}</strong>
+              <span>{day.getDate()}</span>
+              {draftDropDate && toLocalDateKey(draftDropDate) === toLocalDateKey(day) ? (
+                <span className="drop-hint">Soltar aqui</span>
+              ) : null}
+              {view === "week" ? (
+                <button
+                  type="button"
+                  className={`day-resize-handle ${weekResizeState ? "active" : ""}`}
+                  aria-label="Redimensionar largura dos dias"
+                  onPointerDown={beginWeekResize}
+                />
+              ) : null}
             </div>
           ))}
         </div>
 
-        {days.map((day) => {
-          const dayEvents = filterEventsForDay(events, day);
+        <div className="timeline-grid" style={timelineColumns}>
+          <div className="time-column">
+            {hours.map((hour) => (
+              <div key={hour} className="time-slot">
+                {`${`${hour}`.padStart(2, "0")}:00`}
+              </div>
+            ))}
+          </div>
 
-          return (
-            <div
-              key={toLocalDateKey(day)}
-              className="day-column"
-              onDoubleClick={() => onCreate(day)}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => {
-                event.preventDefault();
-                const eventId = event.dataTransfer.getData("text/event-id");
-                if (eventId) {
-                  void onDropEvent(eventId, day);
-                }
-              }}
-            >
-              {hours.map((hour) => (
-                <div key={hour} className="slot-row" />
-              ))}
+          {days.map((day) => {
+            const dayEvents = filterEventsForDay(events, day);
 
-              {dayEvents.map((eventRecord) => {
-                const startMinutes = eventStartMinutes(eventRecord);
-                const duration = eventDurationMinutes(eventRecord);
-                const displayDuration =
-                  resizePreview?.eventId === eventRecord.id ? resizePreview.duration : duration;
-                const top = ((startMinutes - CALENDAR_DAY_START_HOUR * 60) / 60) * CALENDAR_TIMELINE_ROW_HEIGHT_PX;
-                const height = (displayDuration / 60) * CALENDAR_TIMELINE_ROW_HEIGHT_PX;
+            return (
+              <div
+                key={toLocalDateKey(day)}
+                className="day-column"
+                onDoubleClick={() => onCreate(day)}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const eventId = getDraggedEventId(event);
+                  if (eventId) {
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    const eventRecord = events.find((entry) => entry.id === eventId);
+                    if (!eventRecord) {
+                      return;
+                    }
+                    const duration = eventDurationMinutes(eventRecord);
+                    const targetStartMinutes = projectDropStartMinutes(event.clientY, rect.top, duration);
+                    void onDropEvent(eventId, day, targetStartMinutes);
+                  }
+                }}
+              >
+                {hours.map((hour) => (
+                  <div key={hour} className="slot-row" />
+                ))}
 
-                return (
-                  <article
-                    key={eventRecord.id}
-                    className={`event-card ${draggingEventId === eventRecord.id ? "dragging" : ""} ${
-                      resizePreview?.eventId === eventRecord.id ? "resizing" : ""
-                    }`}
-                    style={{
-                      top: `${Math.max(0, top)}px`,
-                      height: `${Math.max(48, height)}px`,
-                    }}
-                    draggable
-                    onDragStart={(event) => {
-                      event.dataTransfer.setData("text/event-id", eventRecord.id);
-                      onDragStart(eventRecord.id);
-                    }}
-                    onDragEnd={onDragEnd}
-                    onDoubleClick={() => onOpen(eventRecord)}
-                  >
-                    <div className="event-card-head">
-                      <strong>{eventRecord.title}</strong>
-                      <button type="button" onClick={() => onOpen(eventRecord)}>
-                        Abrir
-                      </button>
-                    </div>
-                    <span>{`${formatTime(new Date(eventRecord.startsAt))} - ${formatTime(new Date(eventRecord.endsAt))}`}</span>
-                    {eventRecord.description ? <p>{eventRecord.description}</p> : null}
-                    <ResizeHandle
-                      eventId={eventRecord.id}
-                      duration={duration}
-                      resizingEventId={resizingEventId}
-                      setResizingEventId={setResizingEventId}
-                      onPreview={(nextDuration) => setResizePreview({ eventId: eventRecord.id, duration: nextDuration })}
-                      onCommit={onResize}
-                      onClearPreview={() => {
-                        setResizePreview((current) => (current?.eventId === eventRecord.id ? null : current));
+                {dayEvents.map((eventRecord) => {
+                  const startMinutes = eventStartMinutes(eventRecord);
+                  const duration = eventDurationMinutes(eventRecord);
+                  const displayStartMinutes =
+                    resizePreview?.eventId === eventRecord.id ? resizePreview.startMinutes : startMinutes;
+                  const displayEndMinutes =
+                    resizePreview?.eventId === eventRecord.id ? resizePreview.endMinutes : startMinutes + duration;
+                  const top =
+                    ((displayStartMinutes - CALENDAR_DAY_START_HOUR * 60) / 60) * CALENDAR_TIMELINE_ROW_HEIGHT_PX;
+                  const height =
+                    ((displayEndMinutes - displayStartMinutes) / 60) * CALENDAR_TIMELINE_ROW_HEIGHT_PX;
+
+                  return (
+                    <article
+                      key={eventRecord.id}
+                      className={`event-card ${draggingEventId === eventRecord.id ? "dragging" : ""} ${
+                        resizePreview?.eventId === eventRecord.id ? "resizing" : ""
+                      }`}
+                      style={{
+                        top: `${Math.max(0, top)}px`,
+                        height: `${Math.max(48, height)}px`,
                       }}
-                      onResizeStart={() => setResizePreview({ eventId: eventRecord.id, duration })}
-                    />
-                  </article>
-                );
-              })}
-            </div>
-          );
-        })}
-      </div>
+                      draggable
+                      onDragStart={(event) => {
+                        event.dataTransfer.effectAllowed = "move";
+                        event.dataTransfer.setData("text/event-id", eventRecord.id);
+                        event.dataTransfer.setData("text/plain", eventRecord.id);
+                        onDragStart(eventRecord.id);
+                      }}
+                      onDragEnd={onDragEnd}
+                      onDoubleClick={() => onOpen(eventRecord)}
+                    >
+                      <div className="event-card-head">
+                        <strong>{eventRecord.title}</strong>
+                        <button type="button" onClick={() => onOpen(eventRecord)}>
+                          Abrir
+                        </button>
+                      </div>
+                      <span>{`${formatTime(new Date(eventRecord.startsAt))} - ${formatTime(new Date(eventRecord.endsAt))}`}</span>
+                      {eventRecord.description ? <p>{eventRecord.description}</p> : null}
+                      <ResizeHandle
+                        eventId={eventRecord.id}
+                        startMinutes={startMinutes}
+                        endMinutes={startMinutes + duration}
+                        resizingEventId={resizingEventId}
+                        setResizingEventId={setResizingEventId}
+                        onPreview={(nextStartMinutes, nextEndMinutes) =>
+                          setResizePreview({
+                            eventId: eventRecord.id,
+                            startMinutes: nextStartMinutes,
+                            endMinutes: nextEndMinutes,
+                          })
+                        }
+                        onCommit={onResize}
+                        onClearPreview={() => {
+                          setResizePreview((current) => (current?.eventId === eventRecord.id ? null : current));
+                        }}
+                        onResizeStart={() =>
+                          setResizePreview({
+                            eventId: eventRecord.id,
+                            startMinutes,
+                            endMinutes: startMinutes + duration,
+                          })
+                        }
+                      />
+                    </article>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </section>
   );
 }
 
+function getDraggedEventId(event: React.DragEvent<HTMLElement>) {
+  return event.dataTransfer.getData("text/event-id") || event.dataTransfer.getData("text/plain");
+}
+
 function ResizeHandle({
   eventId,
-  duration,
+  startMinutes,
+  endMinutes,
   resizingEventId,
   setResizingEventId,
   onPreview,
@@ -842,24 +904,30 @@ function ResizeHandle({
   onResizeStart,
 }: {
   eventId: string;
-  duration: number;
+  startMinutes: number;
+  endMinutes: number;
   resizingEventId: string | null;
   setResizingEventId: (eventId: string | null) => void;
-  onPreview: (nextDurationMinutes: number) => void;
-  onCommit: (eventId: string, nextDurationMinutes: number) => Promise<void>;
+  onPreview: (nextStartMinutes: number, nextEndMinutes: number) => void;
+  onCommit: (eventId: string, nextStartMinutes: number, nextEndMinutes: number) => Promise<void>;
   onClearPreview: () => void;
   onResizeStart: () => void;
 }) {
   const startY = useRef<number | null>(null);
-  const initialDuration = useRef<number>(duration);
-  const lastDuration = useRef<number>(duration);
+  const initialStart = useRef<number>(startMinutes);
+  const initialEnd = useRef<number>(endMinutes);
+  const lastRange = useRef<{ startMinutes: number; endMinutes: number }>({
+    startMinutes,
+    endMinutes,
+  });
 
-  function beginResize(event: React.PointerEvent<HTMLDivElement>) {
+  function beginResize(edge: "top" | "bottom", event: React.PointerEvent<HTMLButtonElement>) {
     event.stopPropagation();
     event.preventDefault();
     startY.current = event.clientY;
-    initialDuration.current = duration;
-    lastDuration.current = duration;
+    initialStart.current = startMinutes;
+    initialEnd.current = endMinutes;
+    lastRange.current = { startMinutes, endMinutes };
     setResizingEventId(eventId);
     onResizeStart();
 
@@ -869,19 +937,26 @@ function ResizeHandle({
       }
 
       const delta = moveEvent.clientY - startY.current;
-      const nextDuration = projectResizeDuration(initialDuration.current, delta);
-      lastDuration.current = nextDuration;
-      onPreview(nextDuration);
+      const nextStartMinutes =
+        edge === "top"
+          ? projectResizeStartMinutes(initialStart.current, initialEnd.current, delta)
+          : initialStart.current;
+      const nextEndMinutes =
+        edge === "bottom"
+          ? projectResizeEndMinutes(initialStart.current, initialEnd.current, delta)
+          : initialEnd.current;
+      lastRange.current = { startMinutes: nextStartMinutes, endMinutes: nextEndMinutes };
+      onPreview(nextStartMinutes, nextEndMinutes);
     };
 
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
-      const nextDuration = lastDuration.current;
+      const nextRange = lastRange.current;
       startY.current = null;
       setResizingEventId(null);
       onClearPreview();
-      void onCommit(eventId, nextDuration);
+      void onCommit(eventId, nextRange.startMinutes, nextRange.endMinutes);
     };
 
     window.addEventListener("pointermove", onMove);
@@ -889,10 +964,20 @@ function ResizeHandle({
   }
 
   return (
-    <div
-      className={`resize-handle ${resizingEventId === eventId ? "active" : ""}`}
-      onPointerDown={beginResize}
-    />
+    <>
+      <button
+        type="button"
+        className={`resize-handle resize-handle-top ${resizingEventId === eventId ? "active" : ""}`}
+        aria-label="Redimensionar início do evento"
+        onPointerDown={(event) => beginResize("top", event)}
+      />
+      <button
+        type="button"
+        className={`resize-handle resize-handle-bottom ${resizingEventId === eventId ? "active" : ""}`}
+        aria-label="Redimensionar término do evento"
+        onPointerDown={(event) => beginResize("bottom", event)}
+      />
+    </>
   );
 }
 
