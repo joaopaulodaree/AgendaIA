@@ -1,16 +1,17 @@
 import type { AuthResponse, EventRecord, UserRecord } from "./types.js";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
 async function request<T>(
   path: string,
   options: RequestInit = {},
   token?: string | null,
 ): Promise<T> {
+  const hasBody = options.body !== undefined && options.body !== null;
   const response = await fetch(`${API_URL}${path}`, {
     ...options,
     headers: {
-      "content-type": "application/json",
+      ...(hasBody ? { "content-type": "application/json" } : {}),
       ...(token ? { authorization: `Bearer ${token}` } : {}),
       ...(options.headers ?? {}),
     },

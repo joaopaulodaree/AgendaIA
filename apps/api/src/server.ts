@@ -4,13 +4,29 @@ import { createSessionToken, getSessionExpiry, hashPassword, hashSessionToken, v
 import { AgendaStore } from "./store.js";
 import type { CreateEventInput, EventRecord, UserRecord, UserRole } from "./domain.js";
 
-const port = Number(process.env.PORT ?? 3000);
+const port = Number(process.env.PORT ?? 3001);
 const pool = createPool();
 const store = new AgendaStore(pool);
+const allowedOrigin = process.env.CORS_ORIGIN ?? "*";
+
+function setCorsHeaders(res: http.ServerResponse, origin?: string) {
+  res.setHeader("access-control-allow-origin", allowedOrigin === "*" ? "*" : origin ?? allowedOrigin);
+  res.setHeader("vary", "Origin");
+  res.setHeader("access-control-allow-methods", "GET,POST,PATCH,DELETE,OPTIONS");
+  res.setHeader("access-control-allow-headers", "content-type, authorization");
+  res.setHeader("access-control-max-age", "86400");
+}
 
 function sendJson(res: http.ServerResponse, statusCode: number, payload: unknown) {
+  setCorsHeaders(res, undefined);
   res.writeHead(statusCode, { "content-type": "application/json" });
   res.end(JSON.stringify(payload));
+}
+
+function sendNoContent(res: http.ServerResponse) {
+  setCorsHeaders(res, undefined);
+  res.writeHead(204);
+  res.end();
 }
 
 function sanitizeUser(user: UserRecord) {
@@ -546,6 +562,13 @@ const server = http.createServer(async (req, res) => {
   }
 
   const url = new URL(req.url, `http://${req.headers.host ?? "localhost"}`);
+  const origin = req.headers.origin;
+  setCorsHeaders(res, origin);
+
+  if (req.method === "OPTIONS") {
+    sendNoContent(res);
+    return;
+  }
 
   try {
     if (req.method === "GET" && url.pathname === "/health") {

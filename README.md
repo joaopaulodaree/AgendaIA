@@ -21,7 +21,7 @@ Monorepo inicial para o sistema de agenda inteligente.
 
 ## Postgres Local
 1. Suba o serviço com `docker compose up -d` usando o `docker-compose.yml` da raiz.
-2. Se preferir Colima, suba o mesmo container com a porta `5432` publicada no host.
+2. Se preferir Colima, suba o mesmo container com a porta `5433` publicada no host.
 3. Copie `apps/api/.env.example` para `apps/api/.env`.
 4. Ajuste `DATABASE_URL` para apontar para o seu Postgres local.
 5. Rode `pnpm --filter @agendaia/api db:migrate`.
@@ -30,7 +30,7 @@ Monorepo inicial para o sistema de agenda inteligente.
 Exemplo de `.env` local:
 
 ```env
-PORT=3000
+PORT=3001
 DATABASE_URL=postgresql://postgres:postgres@localhost:5433/agendaia
 SESSION_TTL_DAYS=7
 ```
