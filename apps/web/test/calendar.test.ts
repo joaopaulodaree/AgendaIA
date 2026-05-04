@@ -50,7 +50,7 @@ test("snaps durations to the nearest 15 minutes and enforces minimum duration", 
   assert.equal(normalizeDurationMinutes(7), 15);
   assert.equal(normalizeDurationMinutes(22), 15);
   assert.equal(normalizeDurationMinutes(23), 30);
-  assert.equal(clampDurationMinutes(4), CALENDAR_DAY_START_HOUR * 60);
+  assert.equal(clampDurationMinutes(4), 15);
   assert.equal(clampDurationMinutes(2000), CALENDAR_DAY_END_HOUR * 60);
 });
 
@@ -91,8 +91,10 @@ test("returns consistent calendar ranges and timeline hours", () => {
   assert.equal(dayRange.end.getDate(), 5);
   assert.equal(weekRange.start.getDay(), 1);
   assert.equal(monthDays.length, 42);
-  assert.equal(timelineHours[0], CALENDAR_DAY_START_HOUR);
-  assert.equal(timelineHours.at(-1), CALENDAR_DAY_END_HOUR - 1);
+  assert.equal(timelineHours[0], 0);
+  assert.equal(timelineHours.at(-1), 23);
+  assert.equal(CALENDAR_DAY_START_HOUR, 0);
+  assert.equal(CALENDAR_DAY_END_HOUR, 24);
   assert.equal(CALENDAR_TIMELINE_ROW_HEIGHT_PX, 72);
 });
 

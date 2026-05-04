@@ -479,33 +479,35 @@ function App() {
         {eventError ? <div className="error-banner">{eventError}</div> : null}
         {loadingEvents ? <div className="loading-banner">Carregando agenda...</div> : null}
 
-        {view === "month" ? (
-          <MonthGrid
-            currentDate={currentDate}
-            days={days}
-            events={visibleEvents}
-            onCreate={openCreateDraft}
-            onOpen={openEditDraft}
-            draggingEventId={draggingEventId}
-            onDropEvent={dropEventOnDay}
-          />
-        ) : (
-          <TimelineView
-            currentDate={currentDate}
-            view={view}
-            days={days}
-            events={visibleEvents}
-            onCreate={openCreateDraft}
-            onOpen={openEditDraft}
-            draggingEventId={draggingEventId}
-            onDragStart={eventCardDragStart}
-            onDragEnd={eventCardDragEnd}
-            onDropEvent={dropEventOnDay}
-            onResize={resizeEvent}
-            resizingEventId={resizingEventId}
-            setResizingEventId={setResizingEventId}
-          />
-        )}
+        <div className="calendar-stage">
+          {view === "month" ? (
+            <MonthGrid
+              currentDate={currentDate}
+              days={days}
+              events={visibleEvents}
+              onCreate={openCreateDraft}
+              onOpen={openEditDraft}
+              draggingEventId={draggingEventId}
+              onDropEvent={dropEventOnDay}
+            />
+          ) : (
+            <TimelineView
+              currentDate={currentDate}
+              view={view}
+              days={days}
+              events={visibleEvents}
+              onCreate={openCreateDraft}
+              onOpen={openEditDraft}
+              draggingEventId={draggingEventId}
+              onDragStart={eventCardDragStart}
+              onDragEnd={eventCardDragEnd}
+              onDropEvent={dropEventOnDay}
+              onResize={resizeEvent}
+              resizingEventId={resizingEventId}
+              setResizingEventId={setResizingEventId}
+            />
+          )}
+        </div>
 
         {draft ? (
           <EventDrawer

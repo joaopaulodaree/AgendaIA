@@ -174,11 +174,12 @@ label {
 }
 
 .app-shell {
-  min-height: 100vh;
+  height: 100dvh;
   display: grid;
   grid-template-columns: 260px 1fr;
   gap: 1rem;
   padding: 1rem;
+  overflow: hidden;
 }
 
 .sidebar,
@@ -196,6 +197,8 @@ label {
   flex-direction: column;
   justify-content: space-between;
   gap: 1rem;
+  min-height: 0;
+  overflow: auto;
 }
 
 .sidebar h2,
@@ -214,6 +217,9 @@ label {
 .calendar-panel {
   padding: 1rem;
   position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -257,6 +263,13 @@ label {
   background: rgba(255, 255, 255, 0.03);
 }
 
+.calendar-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .error-banner {
   color: #ffcbda;
   border-color: rgba(255, 107, 138, 0.3);
@@ -273,6 +286,9 @@ label {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 0.75rem;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 .month-weekday {
@@ -335,14 +351,22 @@ label {
 }
 
 .timeline {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 0.7rem;
+  flex: 1;
+  min-height: 0;
 }
 
 .timeline-header {
   display: grid;
   grid-template-columns: 88px repeat(7, minmax(0, 1fr));
   gap: 0.7rem;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding-bottom: 0.2rem;
+  background: linear-gradient(180deg, rgba(16, 24, 52, 0.98), rgba(16, 24, 52, 0.92));
 }
 
 .timeline-day-label {
@@ -366,12 +390,22 @@ label {
   display: grid;
   grid-template-columns: 88px repeat(7, minmax(0, 1fr));
   gap: 0.7rem;
-  min-height: 68vh;
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding-right: 0.2rem;
 }
 
 .time-column,
 .day-column {
   position: relative;
+}
+
+.time-column {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: linear-gradient(180deg, rgba(17, 24, 51, 0.98), rgba(17, 24, 51, 0.92));
 }
 
 .time-slot,
@@ -489,7 +523,6 @@ label {
     flex-direction: column;
   }
 
-  .timeline-header,
   .timeline-grid {
     grid-template-columns: 72px repeat(7, minmax(120px, 1fr));
   }

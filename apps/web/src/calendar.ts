@@ -4,8 +4,8 @@ export type CalendarView = "day" | "week" | "month";
 
 export const SNAP_INTERVAL_MINUTES = 15;
 export const MIN_EVENT_DURATION_MINUTES = 15;
-export const CALENDAR_DAY_START_HOUR = 7;
-export const CALENDAR_DAY_END_HOUR = 21;
+export const CALENDAR_DAY_START_HOUR = 0;
+export const CALENDAR_DAY_END_HOUR = 24;
 export const CALENDAR_TIMELINE_ROW_HEIGHT_PX = 72;
 
 export const SLOT_MINUTES = SNAP_INTERVAL_MINUTES;
