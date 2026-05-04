@@ -404,6 +404,14 @@ export class AgendaStore {
 
   async createEvent(input: CreateEventInput): Promise<EventRecord> {
     return withTransaction(this.pool, async (client) => {
+      await this.assertNoConflicts(client, {
+        ownerUserId: input.ownerUserId,
+        startsAt: input.startsAt,
+        endsAt: input.endsAt,
+        participantIds: input.participantIds ?? [],
+        resourceIds: input.resourceIds ?? [],
+      });
+
       const eventResult = await client.query(
         `
         INSERT INTO app_events (
@@ -506,6 +514,26 @@ export class AgendaStore {
 
   async updateEvent(eventId: string, input: Partial<CreateEventInput>): Promise<EventRecord> {
     return withTransaction(this.pool, async (client) => {
+      const existing = await this.getEventById(client, eventId);
+      if (!existing) {
+        throw new Error(`Event ${eventId} not found`);
+      }
+
+      const nextOwnerUserId = input.ownerUserId ?? existing.ownerUserId;
+      const nextStartsAt = input.startsAt ?? existing.startsAt;
+      const nextEndsAt = input.endsAt ?? existing.endsAt;
+      const nextParticipantIds = input.participantIds ?? existing.participants.map((participant) => participant.userId);
+      const nextResourceIds = input.resourceIds ?? existing.resources.map((resource) => resource.id);
+
+      await this.assertNoConflicts(client, {
+        ownerUserId: nextOwnerUserId,
+        startsAt: nextStartsAt,
+        endsAt: nextEndsAt,
+        participantIds: nextParticipantIds,
+        resourceIds: nextResourceIds,
+        excludeEventId: eventId,
+      });
+
       const updateResult = await client.query(
         `
         UPDATE app_events
@@ -546,10 +574,6 @@ export class AgendaStore {
           input.sync?.syncPayload ? JSON.stringify(input.sync.syncPayload) : null,
         ],
       );
-
-      if (updateResult.rowCount === 0) {
-        throw new Error(`Event ${eventId} not found`);
-      }
 
       if (input.recurrence) {
         await client.query(
@@ -630,6 +654,118 @@ export class AgendaStore {
     );
 
     return (result.rowCount ?? 0) > 0;
+  }
+
+  async findConflictingEvents(
+    executor: DbExecutor,
+    input: {
+    ownerUserId: string;
+    startsAt: string;
+    endsAt: string;
+    participantIds?: string[];
+    resourceIds?: string[];
+    excludeEventId?: string;
+  },
+  ): Promise<Array<{ id: string; title: string; startsAt: string; endsAt: string; scope: "owner" | "participant" | "resource" }>> {
+    const result = await executor.query<{
+      id: string;
+      title: string;
+      starts_at: Date;
+      ends_at: Date;
+      owner_user_id: string;
+      scope: "owner" | "participant" | "resource";
+    }>(
+      `
+      WITH candidate AS (
+        SELECT
+          $1::uuid AS owner_user_id,
+          $2::timestamptz AS starts_at,
+          $3::timestamptz AS ends_at,
+          COALESCE($4::uuid[], '{}'::uuid[]) AS participant_ids,
+          COALESCE($5::uuid[], '{}'::uuid[]) AS resource_ids,
+          $6::uuid AS exclude_event_id
+      )
+      SELECT DISTINCT
+        e.id,
+        e.title,
+        e.starts_at,
+        e.ends_at,
+        e.owner_user_id,
+        CASE
+          WHEN e.owner_user_id = c.owner_user_id THEN 'owner'
+          WHEN EXISTS (
+            SELECT 1
+            FROM app_event_participants ep
+            WHERE ep.event_id = e.id
+              AND ep.user_id = ANY(c.participant_ids)
+          ) THEN 'participant'
+          WHEN EXISTS (
+            SELECT 1
+            FROM app_event_resources er
+            WHERE er.event_id = e.id
+              AND er.resource_id = ANY(c.resource_ids)
+          ) THEN 'resource'
+          ELSE 'owner'
+        END AS scope
+      FROM app_events e
+      CROSS JOIN candidate c
+      WHERE (c.exclude_event_id IS NULL OR e.id <> c.exclude_event_id)
+        AND e.status <> 'cancelled'
+        AND e.starts_at < c.ends_at
+        AND e.ends_at > c.starts_at
+        AND (
+          e.owner_user_id = c.owner_user_id
+          OR EXISTS (
+            SELECT 1
+            FROM app_event_participants ep
+            WHERE ep.event_id = e.id
+              AND ep.user_id = ANY(c.participant_ids)
+          )
+          OR EXISTS (
+            SELECT 1
+            FROM app_event_resources er
+            WHERE er.event_id = e.id
+              AND er.resource_id = ANY(c.resource_ids)
+          )
+        )
+      ORDER BY e.starts_at ASC
+      `,
+      [
+        input.ownerUserId,
+        input.startsAt,
+        input.endsAt,
+        input.participantIds ?? [],
+        input.resourceIds ?? [],
+        input.excludeEventId ?? null,
+      ],
+    );
+
+    return result.rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      startsAt: toIsoString(row.starts_at),
+      endsAt: toIsoString(row.ends_at),
+      scope: row.scope as "owner" | "participant" | "resource",
+    }));
+  }
+
+  async assertNoConflicts(
+    client: DbExecutor,
+    input: {
+      ownerUserId: string;
+      startsAt: string;
+      endsAt: string;
+      participantIds?: string[];
+      resourceIds?: string[];
+      excludeEventId?: string;
+    },
+  ): Promise<void> {
+    const conflicts = await this.findConflictingEvents(client, input);
+
+    if (conflicts.length > 0) {
+      const scopes = conflicts.map((conflict) => conflict.scope).join(", ");
+      throw new Error(`Scheduling conflict detected (${scopes})`);
+    }
   }
 
   async listEventsForRange(input: {

@@ -29,6 +29,10 @@ function sendNoContent(res: http.ServerResponse) {
   res.end();
 }
 
+function isConflictError(error: unknown): boolean {
+  return error instanceof Error && error.message.startsWith("Scheduling conflict detected");
+}
+
 function sanitizeUser(user: UserRecord) {
   const { passwordHash, ...safeUser } = user;
   return safeUser;
@@ -352,7 +356,7 @@ async function handleLogin(req: http.IncomingMessage, res: http.ServerResponse) 
       user: sanitizeUser(user),
     });
   } catch (error) {
-    sendJson(res, 400, {
+    sendJson(res, isConflictError(error) ? 409 : 400, {
       error: error instanceof Error ? error.message : "Bad Request",
     });
   }
@@ -455,7 +459,7 @@ async function handleEventsCreate(req: http.IncomingMessage, res: http.ServerRes
     const event = await store.createEvent(payload);
     sendJson(res, 201, { event });
   } catch (error) {
-    sendJson(res, 400, {
+    sendJson(res, isConflictError(error) ? 409 : 400, {
       error: error instanceof Error ? error.message : "Bad Request",
     });
   }
@@ -504,7 +508,7 @@ async function handleEventUpdate(req: http.IncomingMessage, res: http.ServerResp
     const updated = await store.updateEvent(eventId, payload);
     sendJson(res, 200, { event: updated });
   } catch (error) {
-    sendJson(res, 400, {
+    sendJson(res, isConflictError(error) ? 409 : 400, {
       error: error instanceof Error ? error.message : "Bad Request",
     });
   }
