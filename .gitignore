@@ -12,3 +12,7 @@ vite.svg
 .specs/
 .pnpm-store/
 node_modules/.pnpm-store/
+*.agents/
+*.bg-shell/
+*.gsd/
+skills-lock.json
